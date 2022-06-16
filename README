@@ -1,0 +1,10 @@
+parcoords
+
+usage: py -m parcoords.py [-h] [-?] [-v]
+
+a module for creating parcoord plots from dataframes
+
+optional arguments:
+  -h, --help     show this help message and exit
+  -?             show this help message and exit
+  -v, --version  prints version

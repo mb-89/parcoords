@@ -1,0 +1,11 @@
+#About the setup system
+* setup.py will automatically build requirements.txt, using pipreqs, and also use it for its own requirements.
+* to install the package, run "pip install ." in this directory
+* to install the package in editable mode, run "pip install -e ." (for devs)
+* to build the wheel-file for this package, run "py -m build" in this folder. 
+
+* uses pre-commit hooks (must be installed via pre-commit install)
+* uses black, flake8, isort for linting (they are also part of the pre-commit hook)
+* uses pytest , tox for testing
+
+See also: https://www.youtube.com/watch?v=DhUpxWjOhME

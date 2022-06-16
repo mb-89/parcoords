@@ -1,0 +1,26 @@
+repos:
+- repo: local
+  hooks:
+  - id: precommit-script
+    name: precommit-script
+    entry: py .pre-commit.py
+    language: system
+    types: [python]
+    pass_filenames: false
+  
+- repo: https://github.com/psf/black
+  rev: 21.9b0
+  hooks:
+  - id: black
+    args: [--safe]
+
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.9.2
+  hooks:
+    - id: flake8
+
+- repo: https://github.com/pycqa/isort
+  rev: 5.6.4
+  hooks:
+    - id: isort
+      args: ["--profile", "black", "--filter-files"]

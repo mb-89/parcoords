@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=42.0","wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+addopts = "--cov=parcoords --cov-report=term-missing -v -W ignore::DeprecationWarning --basetemp=test/tmp"
+testpaths = ["test",]
+
+[tool.isort]
+profile = "black"
