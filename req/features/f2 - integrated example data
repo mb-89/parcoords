@@ -1,0 +1,4 @@
+in case the string "-example" is passed to the parser in f1,
+it shall create a useful example dataset. The dataset shall be stored in a /tmp folder in The
+current working directory so it can be reused quickly.
+#refines: c1

@@ -1,0 +1,4 @@
+for internal use, parcoords shall create a dataframe that contains an overview over
+all data keys that can be used in the parcoords plot and the corresponding values found
+in the dataset.
+#refines: c2

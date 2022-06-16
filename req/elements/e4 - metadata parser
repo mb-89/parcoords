@@ -1,0 +1,5 @@
+#refines: f3
+reads a h5 file and creates a metadata map.
+the map is a dataframe, index are the root datakeys,
+columns are all found metadata keys that could reasonably be parsed,
+column entries are the values of each dataframe for the given metadata keys

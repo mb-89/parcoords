@@ -1,0 +1,6 @@
+parcoords shall create a visualisation for the metadata in the dataframe from f3.
+Every dimension of the parcoords shall correspond to a dimension found in the df.
+it shall be possible to filter for dimensions.
+Every dataset shall be plotted across all dimensions.
+Datasets that are filtered out shall be transparent.
+#refines: c2

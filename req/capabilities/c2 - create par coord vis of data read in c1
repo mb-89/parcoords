@@ -1,0 +1,5 @@
+#requires: c1
+parcoords shall visualize a h5 file parsed by c1. Every category that is found in the metadata
+shall be one dimension of the parallel coords, if reasonable. 
+The parallel coords shall be filterable, and shall provide additional visualisations for the 
+filtered dataset, for example a list of contained keys.

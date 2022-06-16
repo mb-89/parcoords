@@ -1,0 +1,5 @@
+#refines: f4
+given the metada map, the parcoord visualisation
+is a pyqtgraph widget that dispays the metadata as parallel coordinates.
+the data can be filtered by regions of interest, and all data that is filtered
+out shall be visible as such in the parcoords.

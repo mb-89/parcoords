@@ -1,0 +1,2 @@
+the hdf5 parser shall parse a file at a given path (using a with-statement).
+#refines:c1

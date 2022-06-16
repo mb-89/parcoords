@@ -1,0 +1,3 @@
+parcoords shall take an h5 file as input. This file shall contain dataframes (directly under root)
+and each dataframe metadata shall be stored in the "attrs" of its key.
+after reading the file, the filehandle shall be used internally to access the data.

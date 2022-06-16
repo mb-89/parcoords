@@ -1,0 +1,2 @@
+converts a dictionary of dataframes with metadata to a h5 file
+#refines: f2

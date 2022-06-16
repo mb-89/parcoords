@@ -1,7 +1,7 @@
-from pybudget import pybudget
+from parcoords import parcoords as module
 
 
 def test_main():
-    assert pybudget.main(["-v"]) == 0
-    assert pybudget.main(["-?"]) == 0
-    assert pybudget.main() == 0
+    assert module.main(["-v"]) == 0
+    assert module.main(["-?"]) == 0
+    assert module.main() == 0
