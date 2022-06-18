@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 from . import __metadata__
 
@@ -9,6 +10,9 @@ def parseArgs(argv):
     )
     p.add_argument("-?", action="store_true", help="show this help message and exit")
     p.add_argument("-v", "--version", action="store_true", help="prints version")
+    p.add_argument(
+        "-src", type=Path, help="data src path. pass '#example' to show example data"
+    )
 
     args = vars(p.parse_args(argv))
     return args, p
@@ -26,5 +30,8 @@ def main(argv=None):
         return 0
 
     from parcoords import api
+
+    with api.read(args["src"]) as data:
+        api.show(data)
 
     return 0
