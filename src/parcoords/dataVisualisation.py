@@ -11,46 +11,61 @@ from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from parcoords.dataAnalysis import getMetaData
+from parcoords.dataAnalysis import getMetaData, getMetaMatrix
 
 QtWebEngineWidgets = importlib.import_module(pg.Qt.lib + ".QtWebEngineWidgets")
+DBG_DONTBLOCK = False
 
 
-def visualizeMetadata(meta, dfs):
+class parCoordDockArea(DockArea):
+    def __init__(self):
+        super().__init__()
+        self.pc = pc = ParCoordWidget()
+        pcd = Dock("metadata")
+        pcd.addWidget(pc)
 
+        pd = Dock("plots")
+        self.plts = plts = FilteredPlots(self.pc)
+        pd.addWidget(plts)
+
+        self.addDock(pcd, "top")
+        self.addDock(pd, "bottom")
+
+    def setParcoordData(self, dfs):
+        self.pc.setParcoordData(dfs)
+
+
+def mkgui():
     pg.mkQApp("parcoord")
     win = QtWidgets.QMainWindow()
+    area = parCoordDockArea()
+    win.setCentralWidget(area)
+    win.parcoords = area
+    return win
+
+
+# implements: e5
+def visualize(dfs, block=True):
+    win = mkgui()
+    win.parcoords.setParcoordData(dfs)
     win.show()
-    area = DockArea()
-    win.setCentralWidget(area)
-    win.setCentralWidget(area)
-
-    pc = ParCoordWidget(meta)
-    pcd = Dock("metadata")
-    pcd.addWidget(pc)
-
-    pd = Dock("plots")
-    plts = FilteredPlots(dfs, pc.colormap, pc.colormapKey)
-    pc.selectionchanged.connect(plts.updatePlots)
-    pd.addWidget(plts)
-
-    area.addDock(pcd, "top")
-    area.addDock(pd, "bottom")
-
-    pg.exec()
+    if block and not DBG_DONTBLOCK:  # pragma: no cover
+        pg.exec()
 
 
 class FilteredPlots(pg.GraphicsLayoutWidget):
-    def __init__(self, dfs, colormap, colormapkey):
-        super().__init__()
-        self.dfs = dfs
-        self.filt = self.dfs.keys()
-        self.colormap = colormap
-        self.colormapkey = colormapkey
+    finished = QtCore.Signal()
 
-        self.createPlots()
+    def __init__(self, parcoords):
+        super().__init__()
+        self.pc = parcoords
+        self.pc.datachanged.connect(self.createPlots)
+        self.pc.selectionchanged.connect(self.updatePlots)
 
     def createPlots(self):
+        self.dfs = self.pc.dfs
+        self.filt = self.dfs.keys()
+
         self.clear()
         self.pltLines = {}
         p1 = self.addPlot()
@@ -61,10 +76,11 @@ class FilteredPlots(pg.GraphicsLayoutWidget):
         for key in self.filt:
             df = self.dfs[key]
             meta = getMetaData(self.dfs, key)
-            pen = self.colormap.map2Col(meta[self.colormapkey])
+            pen = self.pc.colormap.map2Col(meta[self.pc.colormapkey])
             self.pltLines[key] = p1.plot(
                 x=df.index.values, y=df["y"], pen=pen, name=key
             )
+        self.finished.emit()
 
     def updatePlots(self, filt=None):
         if filt == self.filt:
@@ -75,18 +91,32 @@ class FilteredPlots(pg.GraphicsLayoutWidget):
         for k, v in self.pltLines.items():
             vis = k in self.filt
             v.setVisible(vis)
+        self.finished.emit()
 
 
 class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
     selectionchanged = QtCore.Signal(list)
+    datachanged = QtCore.Signal()
 
-    def __init__(self, meta):
+    def __init__(self):
         super().__init__()
+
+        self.td = tempfile.TemporaryDirectory()
+        self.tempfile = self.td.name + "/tmp.html"
+        self.loadFinished.connect(self.onloadFinished)
+        self._page = self.page()
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(250)
+        self.timer.timeout.connect(self.getFilteredKeys)
+
+    def setParcoordData(self, dfs):
+        meta = getMetaMatrix(dfs)
         dims = [dict(label=k, values=meta[k]) for k in meta.columns]
         self.meta = meta
+        self.dfs = dfs
 
         csname = "Turbo"
-        csvar = "omega"
+        csvar = meta.columns[0]
         cs = getattr(pcol.sequential, csname)
 
         line = dict(color=meta[csvar], colorscale=csname)
@@ -95,28 +125,21 @@ class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
         fig.layout.template = "plotly_dark"
         html = fig.to_html()
 
-        self.td = tempfile.TemporaryDirectory()
-        file = self.td.name + "/tmp.html"
-
-        open(file, "w").write(html)
-        url = QtCore.QUrl.fromLocalFile(Path(file).resolve())
+        open(self.tempfile, "w").write(html)
+        url = QtCore.QUrl.fromLocalFile(Path(self.tempfile).resolve())
         self.load(url)
-        self.loadFinished.connect(self.onloadFinished)
-        self._page = self.page()
-        self.timer = QtCore.QTimer()
-        self.timer.setInterval(250)
-        self.timer.timeout.connect(self.getFilteredKeys)
 
-        self.calcMinMaxValues()
         self.oldfilts = meta.index
 
+        self.calcMinMaxValues()
         csminmax = self.minmax[csvar]
         pos = np.linspace(0, 1, len(cs))
         cm = pg.ColorMap(pos, cs)
         cm.map2Col = lambda x: cm[((x - csminmax[0]) / csminmax[2])]
-
         self.colormap = cm
-        self.colormapKey = csvar
+        self.colormapkey = csvar
+
+        self.datachanged.emit()
 
     def calcMinMaxValues(self):
         self.minmax = {}

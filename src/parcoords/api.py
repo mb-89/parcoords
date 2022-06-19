@@ -7,5 +7,4 @@ read = dataAnalysis.ReadContext
 
 
 def show(data):
-    mm = dataAnalysis.getMetaMatrix(data)
-    dataVisualisation.visualizeMetadata(mm, data)
+    dataVisualisation.visualize(data)
