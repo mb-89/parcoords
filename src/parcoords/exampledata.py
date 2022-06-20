@@ -11,7 +11,8 @@ DBG_NOCACHE = 0
 TMPPATH = "tmp/example.h5"
 
 
-def getExampleData():  # implements: e2
+def getExampleData():
+    # implements: e2
     global DBG_NOCACHE
     p = Path(TMPPATH)
     if DBG_NOCACHE:
