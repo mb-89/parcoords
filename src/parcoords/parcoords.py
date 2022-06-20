@@ -31,7 +31,7 @@ def main(argv=None):
 
     from parcoords import api
 
-    with api.read(args["src"]) as data:
-        api.show(data)
+    data = api.read(args["src"])
+    api.show(data)
 
     return 0

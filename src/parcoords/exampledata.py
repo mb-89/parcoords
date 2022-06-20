@@ -25,7 +25,7 @@ def getExampleData():
     bufferdict = {}
     for key, df in createExampleData():
         bufferdict[key] = df
-    dataAnalysis.dumpdict2h5(bufferdict, p)
+    dataAnalysis.dict2h5(bufferdict, p)
     return getExampleData()
 
 

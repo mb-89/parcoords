@@ -9,9 +9,10 @@ import plotly.graph_objects as go
 import pyqtgraph as pg
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from tabulate import tabulate
 
-from parcoords.dataAnalysis import getMetaData, getMetaMatrix
+from parcoords.dataAnalysis import getMetaMatrix
 
 QtWebEngineWidgets = importlib.import_module(pg.Qt.lib + ".QtWebEngineWidgets")
 DBG_DONTBLOCK = False
@@ -21,7 +22,7 @@ class parCoordDockArea(DockArea):
     def __init__(self):
         super().__init__()
         self.pc = pc = ParCoordWidget()
-        pcd = Dock("metadata")
+        pcd = Dock("parcoords")
         pcd.addWidget(pc)
 
         pd = Dock("plots")
@@ -31,8 +32,145 @@ class parCoordDockArea(DockArea):
         self.addDock(pcd, "top")
         self.addDock(pd, "bottom")
 
+        stats = Dock("stats")
+        self.statswidget = StatsWidget(self.pc)
+        stats.addWidget(self.statswidget)
+        self.addDock(stats, "below", pcd)
+
+        pcd.raiseDock()
+
     def setParcoordData(self, dfs):
         self.pc.setParcoordData(dfs)
+
+
+class HistDock(Dock):
+    def __init__(self):
+        super().__init__("metadata histograms")
+        self.plt = pg.GraphicsLayoutWidget()
+        self.sel = pg.QtWidgets.QComboBox()
+        self.addWidget(self.sel)
+        self.addWidget(self.plt)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.sel.currentTextChanged.connect(self.updateData)
+
+    def setData(self, parcoords):
+        ks = tuple(parcoords.minmax.keys())
+        self.pc = parcoords
+        self.sel.addItems(ks)
+        self.sel.setCurrentText(ks[0])
+        self.updateData()
+
+    def updateData(self):
+        sel = self.sel.currentText()
+        hist, histEdges = np.histogram(self.pc.meta[sel])
+        self.plt.clear()
+        p1 = self.plt.addPlot()
+        p1.showGrid(1, 1, 0.6)
+        p1.setLabel("bottom", "value")
+        p1.setLabel("left", "cnt")
+
+        xs = (histEdges[:-1] + histEdges[1:]) / 2
+        w = histEdges[1] - histEdges[0]
+        bi = pg.BarGraphItem(x=xs, height=hist, width=w, brush="r")
+        p1.addItem(bi)
+
+
+class BarDock(Dock):
+    def __init__(self):
+        super().__init__("metadata bardiags")
+        self.plt = pg.GraphicsLayoutWidget()
+        self.sel = pg.QtWidgets.QComboBox()
+        self.plt2 = pg.GraphicsLayoutWidget()
+        self.sel2 = pg.QtWidgets.QComboBox()
+        self.addWidget(self.sel)
+        self.addWidget(self.plt)
+        self.addWidget(self.sel2)
+        self.addWidget(self.plt2)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.sel.currentTextChanged.connect(self.updateData)
+        self.sel2.currentTextChanged.connect(self.updateData)
+
+    def setData(self, parcoords):
+        ks = tuple(parcoords.minmax.keys())
+        self.pc = parcoords
+        self.sel.addItems(ks)
+        self.sel.setCurrentText(ks[0])
+        self.sel2.addItems(ks)
+        self.sel2.setCurrentText(ks[1])
+        self.updateData()
+
+    def updateData(self):
+        self.plt.clear()
+        self.plt2.clear()
+
+        sel = self.sel.currentText()
+        if not sel:
+            return
+
+        p1 = self.plt.addPlot()
+        p1.showGrid(1, 1, 0.6)
+        p1.setLabel("bottom", "dataset")
+        p1.setLabel("left", "val")
+
+        xs = range(len(self.pc.dfs))
+        ys = [x.attrs[sel] for x in self.pc.dfs.values()]
+        bi = pg.BarGraphItem(x=xs, height=ys, width=0.9, brush="r")
+        p1.addItem(bi)
+
+        sel2 = self.sel2.currentText()
+        if not sel2:
+            return
+
+        p2 = self.plt2.addPlot()
+        p2.showGrid(1, 1, 0.6)
+        p2.setLabel("bottom", "dataset")
+        p2.setLabel("left", "val")
+
+        xs = range(len(self.pc.dfs))
+        ys = [x.attrs[sel2] for x in self.pc.dfs.values()]
+        bi = pg.BarGraphItem(x=xs, height=ys, width=0.9, brush="r")
+        p2.addItem(bi)
+        p1.setXLink(p2)
+
+
+class StatsWidget(DockArea):
+    def __init__(self, parcoords):
+        super().__init__()
+
+        self.pc = parcoords
+        self.pc.datachanged.connect(self.createStats)
+
+        self.table = QtWidgets.QPlainTextEdit()
+        f = self.table.font()
+        f.setFamily("monospace")
+        f.setStyleHint(QtGui.QFont.TypeWriter)
+        self.table.setFont(f)
+        self.tableDock = Dock("metadata table")
+        self.tableDock.addWidget(self.table)
+        self.addDock(self.tableDock, "left")
+
+        self.HistDock = HistDock()
+        self.addDock(self.HistDock, "right")
+        self.BarDock = BarDock()
+        self.addDock(self.BarDock, "below", self.HistDock)
+
+    def createStats(self):
+
+        self.table.clear()
+
+        self.dfs = self.pc.dfs
+        minmaxdata = self.pc.minmax
+        minmax = [["key", "min", "max", "med"]]
+        for k, v in minmaxdata.items():
+            minmax.append([k] + list(v))
+        lines = []
+        lines.append(tabulate(minmax, headers="firstrow", tablefmt="psql") + "\n\n")
+
+        self.table.setPlainText("\n".join(lines))
+        self.HistDock.setData(self.pc)
+        self.BarDock.setData(self.pc)
 
 
 def mkgui():
@@ -58,14 +196,14 @@ class FilteredPlots(pg.QtWidgets.QWidget):
 
     def __init__(self, parcoords):
         super().__init__()
-        self.l = QtWidgets.QGridLayout()
+        self.la = QtWidgets.QGridLayout()
         self.setLayout(self.l)
         self.plt = pg.GraphicsLayoutWidget()
         self.sel = pg.QtWidgets.QComboBox()
-        self.l.addWidget(self.sel)
-        self.l.addWidget(self.plt)
-        self.l.setSpacing(0)
-        self.l.setContentsMargins(0, 0, 0, 0)
+        self.la.addWidget(self.sel)
+        self.la.addWidget(self.plt)
+        self.la.setSpacing(0)
+        self.la.setContentsMargins(0, 0, 0, 0)
         self.pc = parcoords
         self.pc.datachanged.connect(self.createPlots)
         self.pc.selectionchanged.connect(self.updatePlots)
@@ -73,7 +211,7 @@ class FilteredPlots(pg.QtWidgets.QWidget):
 
     def createPlots(self):
         self.dfs = self.pc.dfs
-        self.filt = self.dfs.keys()
+        self.filt = tuple(self.dfs.keys())
         self.sel.clear()
 
         df0 = self.dfs[self.filt[0]]
@@ -95,7 +233,7 @@ class FilteredPlots(pg.QtWidgets.QWidget):
         for key in self.filt:
 
             df = self.dfs[key]
-            meta = getMetaData(self.dfs, key)
+            meta = df.attrs
             pen = self.pc.colormap.map2Col(meta[self.pc.colormapkey])
             self.pltLines[key] = p1.plot(
                 x=df.index.values, y=df[col], pen=pen, name=key
@@ -107,7 +245,7 @@ class FilteredPlots(pg.QtWidgets.QWidget):
         if filt == self.filt:
             return
         if filt is None:
-            filt = self.dfs.keys()
+            filt = tuple(self.dfs.keys())
         self.filt = filt
         for k, v in self.pltLines.items():
             vis = k in self.filt
@@ -144,9 +282,13 @@ class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
 
         csname = "Turbo"
         csvar = meta.columns[0]
+        order = np.argsort(dims[0]["values"])
+        for idx in range(len(dims)):
+            dims[idx]["values"] = dims[idx]["values"][order]
+
         cs = getattr(pcol.sequential, csname)
 
-        colornumbers = [float(x) for x in sorted(list(set(meta[csvar].values)))]
+        colornumbers = [float(x) for x in dims[0]["values"]]
         line = dict(color=colornumbers, colorscale=csname)
         pc = go.Parcoords(dimensions=dims, line=line)
         fig = go.Figure(data=pc)

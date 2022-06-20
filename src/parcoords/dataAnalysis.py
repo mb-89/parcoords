@@ -8,67 +8,56 @@ import pandas as pd
 from parcoords.exampledata import getExampleData
 
 
-def getMetaData(store, key):
-    md = store.get_storer(key).attrs.metadata
-    if store.metasubkey:
-        md = md[store.metasubkey]
-    return md
-
-
-def setMetaData(store, key, val):
-    s = store.get_storer(key)
-    md = getattr(s.attrs, "metadata", {})
-    if store.metasubkey:
-        md[store.metasubkey][key] = val
-    else:
-        md[key] = val
-    s.attrs.metadata = md
-
-
 # implements: e1
-class ReadContext:
-    def __init__(self, path):
-        self.path = path
-        if str(path) == "#example":
-            path = getExampleData()
-        if not Path(path).is_file():
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        self.h5 = pd.HDFStore(path)
+def read(path):
+    path = Path(path)
+    if str(path) == "#example":
+        path = getExampleData()
+    if not Path(path).is_file():
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    def __enter__(self):
-        data = self.h5.__enter__()
-        data.metasubkey = None
-        return data
+    dct = h52dict(path)
+    doCalculations(dct)
+    return dct
 
-    def __exit__(self, type, value, traceback):
-        self.h5.__exit__(type, value, traceback)
+
+calcCallbacks = []
+
+
+def addCalcCallback(cb):
+    global calcCallbacks
+    calcCallbacks.append(cb)
+
+
+def doCalculations(dfs):
+    for cb in calcCallbacks:
+        try:
+            cb(dfs)
+        except:  # noqa: E722
+            pass
 
 
 # implements: e3
-def dumpdict2h5(dct, file):
+def dict2h5(dct, file):
     with pd.HDFStore(file) as store:
         for key, df in dct.items():
             store.put(key, df)
             store.get_storer(key).attrs.metadata = df.attrs
 
 
+def h52dict(file):
+    dct = {}
+    with pd.HDFStore(file) as store:
+        for key in store.keys():
+            dct[key] = store[key]
+            dct[key].attrs = store.get_storer(key).attrs.metadata
+    return dct
+
+
 # implements: e4
 def getMetaMatrix(data, subkey=None):
-
     rows = tuple(data.keys())
-
-    allMetaData = [getMetaData(data, x) for x in rows]
-
-    # shortcut: if we have a key called "meta", we use that
-    if all("meta" in x for x in allMetaData):
-        subkey = "meta"
-
-    if subkey:
-        allMetaData = [x[subkey] for x in allMetaData]
-        # in this case, copy all keys of the subkey to the top level , so we can reference
-        # them later
-    data.metasubkey = subkey
-
+    allMetaData = [data[x].attrs for x in rows]
     cfi = itt.chain.from_iterable
 
     def isUsableMetaKey(key):

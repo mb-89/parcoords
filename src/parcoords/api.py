@@ -3,7 +3,7 @@ from parcoords import log as logging
 
 log = logging.getLogger()
 
-read = dataAnalysis.ReadContext
+read = dataAnalysis.read
 
 
 def show(data):
