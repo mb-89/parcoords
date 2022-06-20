@@ -9,7 +9,20 @@ from parcoords.exampledata import getExampleData
 
 
 def getMetaData(store, key):
-    return store.get_storer(key).attrs.metadata
+    md = store.get_storer(key).attrs.metadata
+    if store.metasubkey:
+        md = md[store.metasubkey]
+    return md
+
+
+def setMetaData(store, key, val):
+    s = store.get_storer(key)
+    md = getattr(s.attrs, "metadata", {})
+    if store.metasubkey:
+        md[store.metasubkey][key] = val
+    else:
+        md[key] = val
+    s.attrs.metadata = md
 
 
 # implements: e1
@@ -23,7 +36,9 @@ class ReadContext:
         self.h5 = pd.HDFStore(path)
 
     def __enter__(self):
-        return self.h5.__enter__()
+        data = self.h5.__enter__()
+        data.metasubkey = None
+        return data
 
     def __exit__(self, type, value, traceback):
         self.h5.__exit__(type, value, traceback)
@@ -38,10 +53,21 @@ def dumpdict2h5(dct, file):
 
 
 # implements: e4
-def getMetaMatrix(data):
+def getMetaMatrix(data, subkey=None):
 
     rows = tuple(data.keys())
+
     allMetaData = [getMetaData(data, x) for x in rows]
+
+    # shortcut: if we have a key called "meta", we use that
+    if all("meta" in x for x in allMetaData):
+        subkey = "meta"
+
+    if subkey:
+        allMetaData = [x[subkey] for x in allMetaData]
+        # in this case, copy all keys of the subkey to the top level , so we can reference
+        # them later
+    data.metasubkey = subkey
 
     cfi = itt.chain.from_iterable
 

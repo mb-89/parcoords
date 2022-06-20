@@ -53,34 +53,55 @@ def visualize(dfs, block=True):
         pg.exec()
 
 
-class FilteredPlots(pg.GraphicsLayoutWidget):
+class FilteredPlots(pg.QtWidgets.QWidget):
     finished = QtCore.Signal()
 
     def __init__(self, parcoords):
         super().__init__()
+        self.l = QtWidgets.QGridLayout()
+        self.setLayout(self.l)
+        self.plt = pg.GraphicsLayoutWidget()
+        self.sel = pg.QtWidgets.QComboBox()
+        self.l.addWidget(self.sel)
+        self.l.addWidget(self.plt)
+        self.l.setSpacing(0)
+        self.l.setContentsMargins(0, 0, 0, 0)
         self.pc = parcoords
         self.pc.datachanged.connect(self.createPlots)
         self.pc.selectionchanged.connect(self.updatePlots)
+        self.sel.currentTextChanged.connect(self.drawplt)
 
     def createPlots(self):
         self.dfs = self.pc.dfs
         self.filt = self.dfs.keys()
+        self.sel.clear()
 
-        self.clear()
+        df0 = self.dfs[self.filt[0]]
+        self.sel.addItems(df0.columns)
+        self.sel.setCurrentText(df0.columns[0])
+        self.drawplt()
+
+    def drawplt(self, _=None):
+        df0 = self.dfs[self.filt[0]]
+        col = self.sel.currentText()
+        xname = df0.index.name
+        self.plt.clear()
         self.pltLines = {}
-        p1 = self.addPlot()
+        p1 = self.plt.addPlot()
         p1.addLegend()
         p1.showGrid(1, 1, 0.6)
-        p1.setLabel("bottom", "t/s")
-        p1.setLabel("left", "y")
+        p1.setLabel("bottom", xname)
+        p1.setLabel("left", col)
         for key in self.filt:
+
             df = self.dfs[key]
             meta = getMetaData(self.dfs, key)
             pen = self.pc.colormap.map2Col(meta[self.pc.colormapkey])
             self.pltLines[key] = p1.plot(
-                x=df.index.values, y=df["y"], pen=pen, name=key
+                x=df.index.values, y=df[col], pen=pen, name=key
             )
         self.finished.emit()
+        self.updatePlots()
 
     def updatePlots(self, filt=None):
         if filt == self.filt:
@@ -111,6 +132,12 @@ class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
 
     def setParcoordData(self, dfs):
         meta = getMetaMatrix(dfs)
+
+        # for the parcoords, drop all metadata that is constant
+        nu = meta.nunique()
+        dropcols = nu[nu == 1].index
+        meta = meta.drop(dropcols, axis=1)
+
         dims = [dict(label=k, values=meta[k]) for k in meta.columns]
         self.meta = meta
         self.dfs = dfs
@@ -119,14 +146,15 @@ class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
         csvar = meta.columns[0]
         cs = getattr(pcol.sequential, csname)
 
-        line = dict(color=meta[csvar], colorscale=csname)
+        colornumbers = [float(x) for x in sorted(list(set(meta[csvar].values)))]
+        line = dict(color=colornumbers, colorscale=csname)
         pc = go.Parcoords(dimensions=dims, line=line)
         fig = go.Figure(data=pc)
         fig.layout.template = "plotly_dark"
         html = fig.to_html()
 
         open(self.tempfile, "w").write(html)
-        url = QtCore.QUrl.fromLocalFile(Path(self.tempfile).resolve())
+        url = QtCore.QUrl.fromLocalFile(str(Path(self.tempfile).resolve()))
         self.load(url)
 
         self.oldfilts = meta.index
@@ -135,7 +163,11 @@ class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
         csminmax = self.minmax[csvar]
         pos = np.linspace(0, 1, len(cs))
         cm = pg.ColorMap(pos, cs)
-        cm.map2Col = lambda x: cm[((x - csminmax[0]) / csminmax[2])]
+
+        def map2Col(x):
+            return cm[((x - csminmax[0]) / csminmax[2])]
+
+        cm.map2Col = map2Col
         self.colormap = cm
         self.colormapkey = csvar
 
