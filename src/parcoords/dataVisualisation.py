@@ -2,6 +2,7 @@ import importlib
 import json
 import tempfile
 from pathlib import Path
+from typing import List
 
 import numpy as np
 import plotly.colors as pcol
@@ -19,18 +20,19 @@ DBG_DONTBLOCK = False
 
 
 class parCoordDockArea(DockArea):
-    def __init__(self):
+    def __init__(self, noDataView=False):
         super().__init__()
         self.pc = pc = ParCoordWidget()
         pcd = Dock("parcoords")
+
         pcd.addWidget(pc)
-
-        pd = Dock("plots")
-        self.plts = plts = FilteredPlots(self.pc)
-        pd.addWidget(plts)
-
         self.addDock(pcd, "top")
-        self.addDock(pd, "bottom")
+
+        if not noDataView:
+            pd = Dock("plots")
+            self.plts = plts = FilteredPlots(self.pc)
+            pd.addWidget(plts)
+            self.addDock(pd, "bottom")
 
         stats = Dock("stats")
         self.statswidget = StatsWidget(self.pc)
@@ -39,8 +41,49 @@ class parCoordDockArea(DockArea):
 
         pcd.raiseDock()
 
-    def setParcoordData(self, dfs):
-        self.pc.setParcoordData(dfs)
+        self.ld = ListDock(pc)
+        self.addDock(self.ld, "left")
+
+    def setParcoordData(self, dfs, calculator=None):
+        self.pc.setParcoordData(dfs, calculator)
+
+
+class ListDock(Dock):
+    selectionChanged = QtCore.Signal(object)
+
+    def __init__(self, pc):
+        super().__init__("data list")
+        self.parcoords = pc
+        self.view = QtWidgets.QTreeView()
+        self.mdl = QtGui.QStandardItemModel()
+        self.view.setModel(self.mdl)
+        self.setMaximumWidth(250)
+        self.addWidget(self.view)
+        self.parcoords.datachanged.connect(self.setdata)
+        self.view.selectionModel().selectionChanged.connect(self.emitCurrentNode)
+
+    def setdata(self):
+        self.mdl.clear()
+        self.mdl.setHorizontalHeaderLabels(["#", "name"])
+        self.view.setAlternatingRowColors(True)
+        root = self.mdl.invisibleRootItem()
+        for idx, k in enumerate(self.parcoords.dfs.keys()):
+            i1 = QtGui.QStandardItem(str(idx))
+            i1.setEditable(False)
+            i1.setToolTip(k)
+            i2 = QtGui.QStandardItem(k)
+            i2.setEditable(False)
+            i2.setToolTip(k)
+            root.appendRow([i1, i2])
+
+    def emitCurrentNode(self):
+        selectedIDX = self.view.selectedIndexes()
+        if len(selectedIDX) < 1:
+            return
+        else:
+            selectedIDX = selectedIDX[0]
+        selectedItem = self.mdl.itemFromIndex(selectedIDX)
+        self.selectionChanged.emit(selectedItem)
 
 
 class HistDock(Dock):
@@ -197,7 +240,7 @@ class FilteredPlots(pg.QtWidgets.QWidget):
     def __init__(self, parcoords):
         super().__init__()
         self.la = QtWidgets.QGridLayout()
-        self.setLayout(self.l)
+        self.setLayout(self.la)
         self.plt = pg.GraphicsLayoutWidget()
         self.sel = pg.QtWidgets.QComboBox()
         self.la.addWidget(self.sel)
@@ -230,13 +273,14 @@ class FilteredPlots(pg.QtWidgets.QWidget):
         p1.showGrid(1, 1, 0.6)
         p1.setLabel("bottom", xname)
         p1.setLabel("left", col)
+        keynos = dict((k, idx) for idx, k in enumerate(self.dfs.keys()))
         for key in self.filt:
-
+            name = f"#{keynos[key]}"
             df = self.dfs[key]
             meta = df.attrs
             pen = self.pc.colormap.map2Col(meta[self.pc.colormapkey])
             self.pltLines[key] = p1.plot(
-                x=df.index.values, y=df[col], pen=pen, name=key
+                x=df.index.values, y=df[col], pen=pen, name=name
             )
         self.finished.emit()
         self.updatePlots()
@@ -268,7 +312,9 @@ class ParCoordWidget(QtWebEngineWidgets.QWebEngineView):
         self.timer.setInterval(250)
         self.timer.timeout.connect(self.getFilteredKeys)
 
-    def setParcoordData(self, dfs):
+    def setParcoordData(self, dfs, calculator=None):
+        if calculator is not None:
+            calculator(dfs)
         meta = getMetaMatrix(dfs)
 
         # for the parcoords, drop all metadata that is constant

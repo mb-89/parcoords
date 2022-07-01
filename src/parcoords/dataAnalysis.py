@@ -45,11 +45,18 @@ def dict2h5(dct, file):
             store.get_storer(key).attrs.metadata = df.attrs
 
 
-def h52dict(file):
+def h52dict(file, subsample=1):
     dct = {}
     with pd.HDFStore(file) as store:
-        for key in store.keys():
-            dct[key] = store[key]
+        keys = list(store.keys()[::subsample])
+        L = len(keys)
+        for idx, key in enumerate(keys):
+            if idx % 100 == 0:
+                print(f"loading key {idx+1}/{L}")
+            df = store[key]
+            if df.empty:
+                continue
+            dct[key] = df
             dct[key].attrs = store.get_storer(key).attrs.metadata
     return dct
 
@@ -64,7 +71,7 @@ def getMetaMatrix(data, subkey=None):
         try:
             metadata = set(x.get(key, None) for x in allMetaData)
             metadata.discard(None)
-            sorted(metadata)
+            sorted(float(x) for x in metadata)
         except:  # noqa: E722 # if set() or sorted() fail, assume the data is unusable
             return False
         return True
